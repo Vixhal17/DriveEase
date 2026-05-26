@@ -65,7 +65,7 @@ export default function PortalLayout({ role }) {
               onClick={() => {
                 logout()
                 toast.success('Logged out')
-                navigate('/login')
+                navigate(role === 'admin' ? '/admin/login' : '/login')
               }}
             >
               <LogOut size={16} />

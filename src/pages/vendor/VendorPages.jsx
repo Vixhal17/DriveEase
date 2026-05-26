@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useNavigate, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
@@ -11,8 +11,10 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { Button, Card, DataSkeleton, Input, PageShell, Select, StatusTag } from '../../components/common'
+import { Button, CarImage, Card, DataSkeleton, Input, PageShell, Select, StatusTag } from '../../components/common'
 import { useMockFetch } from '../../hooks/useMockFetch'
+import { useAppStore } from '../../store/useAppStore'
+import { formatInrCurrency } from '../../utils/formatters'
 
 export function VendorDashboardPage() {
   const { data: revenue, loading } = useMockFetch('/mock/revenue.json', [])
@@ -20,9 +22,9 @@ export function VendorDashboardPage() {
   return (
     <PageShell title="Vendor Dashboard" subtitle="Track earnings, fleet availability, and upcoming reservations.">
       <section className="grid gap-4 md:grid-cols-3">
-        <Card><p className="text-sm text-slate-300">Today</p><p className="font-heading text-2xl">$2,140</p></Card>
-        <Card><p className="text-sm text-slate-300">This Week</p><p className="font-heading text-2xl">$11,920</p></Card>
-        <Card><p className="text-sm text-slate-300">This Month</p><p className="font-heading text-2xl">$42,210</p></Card>
+        <Card><p className="text-sm text-slate-300">Today</p><p className="font-heading text-2xl">{formatInrCurrency(2140)}</p></Card>
+        <Card><p className="text-sm text-slate-300">This Week</p><p className="font-heading text-2xl">{formatInrCurrency(11920)}</p></Card>
+        <Card><p className="text-sm text-slate-300">This Month</p><p className="font-heading text-2xl">{formatInrCurrency(42210)}</p></Card>
       </section>
 
       {loading ? <DataSkeleton rows={4} /> : null}
@@ -46,8 +48,8 @@ export function VendorDashboardPage() {
       <Card>
         <h3 className="font-heading text-lg">Upcoming Bookings Feed</h3>
         <ul className="mt-3 space-y-2 text-sm text-slate-300">
-          <li>BMW X5 pickup today at 15:30 - John F.</li>
-          <li>Tesla Model 3 pickup tomorrow at 10:00 - Priya K.</li>
+          <li>Tata Nexon EV pickup today at 15:30 - Aakash S.</li>
+          <li>Mahindra XUV700 pickup tomorrow at 10:00 - Priya K.</li>
         </ul>
       </Card>
     </PageShell>
@@ -55,7 +57,7 @@ export function VendorDashboardPage() {
 }
 
 export function VendorCarsPage() {
-  const { data: cars, loading } = useMockFetch('/mock/cars.json', [])
+  const cars = useAppStore((state) => state.vendorCars)
   const navigate = useNavigate()
 
   return (
@@ -64,45 +66,109 @@ export function VendorCarsPage() {
       subtitle="Manage listings, availability, and statuses across your fleet."
       actions={<Button variant="amber" onClick={() => navigate('/vendor/cars/new')}>Add New Car</Button>}
     >
-      {loading ? <DataSkeleton rows={6} /> : null}
-      {!loading ? (
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {cars.map((car) => (
-            <Card key={car.id} className="space-y-3">
-              <div className="h-36 rounded-control bg-gradient-to-br from-blue-600/40 to-slate-700" />
-              <div className="flex items-start justify-between">
-                <h3 className="font-heading text-lg">{car.name}</h3>
-                <StatusTag value={car.status} />
-              </div>
-              <p className="text-sm text-slate-300">${car.pricePerDay}/day</p>
-              <div className="flex gap-2">
-                <Button className="w-full" variant="ghost" onClick={() => navigate(`/vendor/cars/${car.id}/edit`)}>Edit</Button>
-                <Button className="w-full" variant="ghost" onClick={() => toast.error('Car listing deleted')}>
-                  Delete
-                </Button>
-              </div>
-            </Card>
-          ))}
-        </section>
-      ) : null}
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {cars.map((car) => (
+          <Card key={car.id} className="space-y-3">
+            <CarImage src={car.image} alt={car.name} className="h-36 rounded-control" />
+            <div className="flex items-start justify-between">
+              <h3 className="font-heading text-lg">{car.name}</h3>
+              <StatusTag value={car.status} />
+            </div>
+            <p className="text-sm text-slate-300">{formatInrCurrency(car.pricePerDay)}/day</p>
+            <div className="flex gap-2">
+              <Button className="w-full" variant="ghost" onClick={() => navigate(`/vendor/cars/${car.id}/edit`)}>Edit</Button>
+              <Button
+                className="w-full"
+                variant="ghost"
+                onClick={() => {
+                  const deleteCar = useAppStore.getState().deleteVendorCar
+                  deleteCar(car.id)
+                  toast.success('Car listing deleted')
+                }}
+              >
+                Delete
+              </Button>
+            </div>
+          </Card>
+        ))}
+      </section>
     </PageShell>
   )
 }
 
-export function VendorCarFormPage() {
+export function VendorCarFormPage({ returnPath = '/vendor/cars' }) {
   const { id } = useParams()
   const editing = Boolean(id)
   const [step, setStep] = useState(1)
-  const { register, handleSubmit } = useForm()
+  const cars = useAppStore((state) => state.vendorCars)
+  const addVendorCar = useAppStore((state) => state.addVendorCar)
+  const updateVendorCar = useAppStore((state) => state.updateVendorCar)
+  const navigate = useNavigate()
+  const currentCar = cars.find((car) => car.id === id)
+  const { register, handleSubmit, reset } = useForm({
+    defaultValues: {
+      name: currentCar?.name || '',
+      brand: currentCar?.brand || '',
+      year: currentCar?.modelYear || '',
+      type: currentCar?.type || 'SUV',
+      seats: currentCar?.seats || 5,
+      transmission: currentCar?.transmission || 'Automatic',
+      fuel: currentCar?.fuel || 'Petrol',
+      features: currentCar?.features || '',
+      dailyPrice: currentCar?.pricePerDay || '',
+      weeklyPrice: currentCar?.weeklyPrice || '',
+      monthlyPrice: currentCar?.monthlyPrice || '',
+      location: currentCar?.location || '',
+      availableFrom: currentCar?.availableFrom || '',
+      availableTo: currentCar?.availableTo || '',
+      status: currentCar?.status || 'available',
+    },
+  })
 
-  const submit = () => {
+  const submit = (values) => {
     if (step < 5) {
       setStep((prev) => prev + 1)
       toast.success(`Step ${step} saved`)
       return
     }
-    toast.success(editing ? 'Car updated' : 'Car added')
+
+    const payload = {
+      ...values,
+      image: `https://placehold.co/960x640/0f172a/e2e8f0?text=${encodeURIComponent(values.name || 'DriveEase+Car')}`,
+    }
+
+    if (editing) {
+      updateVendorCar(id, payload)
+      toast.success('Car updated')
+    } else {
+      addVendorCar(payload)
+      toast.success('Car added')
+    }
+
+    navigate(returnPath)
   }
+
+  useEffect(() => {
+    if (editing && currentCar) {
+      reset({
+        name: currentCar.name || '',
+        brand: currentCar.brand || '',
+        year: currentCar.modelYear || '',
+        type: currentCar.type || 'SUV',
+        seats: currentCar.seats || 5,
+        transmission: currentCar.transmission || 'Automatic',
+        fuel: currentCar.fuel || 'Petrol',
+        features: currentCar.features || '',
+        dailyPrice: currentCar.pricePerDay || '',
+        weeklyPrice: currentCar.weeklyPrice || '',
+        monthlyPrice: currentCar.monthlyPrice || '',
+        location: currentCar.location || '',
+        availableFrom: currentCar.availableFrom || '',
+        availableTo: currentCar.availableTo || '',
+        status: currentCar.status || 'available',
+      })
+    }
+  }, [editing, currentCar, reset])
 
   return (
     <PageShell title={editing ? 'Edit Car' : 'Add New Car'} subtitle="Details -> Specs -> Photos -> Pricing -> Availability">
@@ -163,7 +229,8 @@ export function VendorCarFormPage() {
 }
 
 export function VendorBookingsPage() {
-  const { data: bookings, loading } = useMockFetch('/mock/userBookings.json', [])
+  const bookings = useAppStore((state) => state.vendorBookings)
+  const updateVendorBookingStatus = useAppStore((state) => state.updateVendorBookingStatus)
 
   const incoming = useMemo(() => bookings.filter((b) => b.status === 'Pending'), [bookings])
 
@@ -172,36 +239,51 @@ export function VendorBookingsPage() {
       <section className="grid gap-4 lg:grid-cols-2">
         <Card>
           <h3 className="font-heading text-lg">Incoming Requests</h3>
-          {loading ? <DataSkeleton rows={3} /> : null}
-          {!loading ? (
-            <div className="mt-3 space-y-3 text-sm">
-              {incoming.map((item) => (
+          <div className="mt-3 space-y-3 text-sm">
+            {incoming.length ? (
+              incoming.map((item) => (
                 <div key={item.id} className="rounded-control border border-slate-700 p-3">
                   <p>{item.id} - {item.car}</p>
                   <p className="text-slate-300">{item.dates}</p>
                   <div className="mt-2 flex gap-2">
-                    <Button className="px-3 py-1 text-xs" onClick={() => toast.success('Booking accepted')}>Accept</Button>
-                    <Button className="px-3 py-1 text-xs" variant="ghost" onClick={() => toast.error('Booking rejected')}>Reject</Button>
+                    <Button
+                      className="px-3 py-1 text-xs"
+                      onClick={() => {
+                        updateVendorBookingStatus(item.id, 'Confirmed')
+                        toast.success('Booking accepted')
+                      }}
+                    >
+                      Accept
+                    </Button>
+                    <Button
+                      className="px-3 py-1 text-xs"
+                      variant="ghost"
+                      onClick={() => {
+                        updateVendorBookingStatus(item.id, 'Cancelled')
+                        toast.error('Booking rejected')
+                      }}
+                    >
+                      Reject
+                    </Button>
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : null}
+              ))
+            ) : (
+              <p className="text-sm text-slate-300">No pending booking requests right now.</p>
+            )}
+          </div>
         </Card>
 
         <Card>
           <h3 className="font-heading text-lg">Active and Past Rentals</h3>
-          {loading ? <DataSkeleton rows={4} /> : null}
-          {!loading ? (
-            <ul className="mt-3 space-y-2 text-sm text-slate-300">
-              {bookings.map((b) => (
-                <li key={b.id} className="flex items-center justify-between rounded-control border border-slate-700 px-3 py-2">
-                  <span>{b.car}</span>
-                  <StatusTag value={b.status} />
-                </li>
-              ))}
-            </ul>
-          ) : null}
+          <ul className="mt-3 space-y-2 text-sm text-slate-300">
+            {bookings.map((b) => (
+              <li key={b.id} className="flex items-center justify-between rounded-control border border-slate-700 px-3 py-2">
+                <span>{b.car}</span>
+                <StatusTag value={b.status} />
+              </li>
+            ))}
+          </ul>
         </Card>
       </section>
     </PageShell>
@@ -210,15 +292,33 @@ export function VendorBookingsPage() {
 
 export function VendorEarningsPage() {
   const { data: revenue, loading } = useMockFetch('/mock/revenue.json', [])
+  const payoutRequests = useAppStore((state) => state.vendorPayoutRequests)
+  const requestVendorPayout = useAppStore((state) => state.requestVendorPayout)
+  const pendingPayout = useMemo(
+    () => revenue.reduce((sum, row) => sum + row.vendorPayout, 0),
+    [revenue],
+  )
 
   return (
     <PageShell title="Earnings" subtitle="Monitor transactions, payouts, and monthly totals.">
       <section className="grid gap-4 md:grid-cols-3">
-        <Card><p className="text-sm text-slate-300">Total Earnings</p><p className="font-heading text-2xl">$184,220</p></Card>
-        <Card><p className="text-sm text-slate-300">Pending Payouts</p><p className="font-heading text-2xl">$9,430</p></Card>
-        <Card><Button className="w-full" variant="amber" onClick={() => toast.success('Payout request submitted')}>Request Payout</Button></Card>
+        <Card><p className="text-sm text-slate-300">Total Earnings</p><p className="font-heading text-2xl">{formatInrCurrency(184220)}</p></Card>
+        <Card><p className="text-sm text-slate-300">Pending Payouts</p><p className="font-heading text-2xl">{formatInrCurrency(pendingPayout)}</p></Card>
+        <Card>
+          <Button
+            className="w-full"
+            variant="amber"
+            onClick={() => {
+              requestVendorPayout(pendingPayout)
+              toast.success('Payout request submitted')
+            }}
+          >
+            Request Payout
+          </Button>
+        </Card>
       </section>
 
+      <section className="grid gap-4 lg:grid-cols-2">
       <Card>
         {loading ? <DataSkeleton rows={5} /> : null}
         {!loading ? (
@@ -228,7 +328,7 @@ export function VendorEarningsPage() {
               <tbody>
                 {revenue.map((row) => (
                   <tr key={row.month} className="border-t border-slate-700">
-                    <td className="py-3">{row.month}</td><td>${row.amount.toLocaleString()}</td><td>${row.vendorPayout.toLocaleString()}</td>
+                    <td className="py-3">{row.month}</td><td>{formatInrCurrency(row.amount)}</td><td>{formatInrCurrency(row.vendorPayout)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -236,6 +336,25 @@ export function VendorEarningsPage() {
           </div>
         ) : null}
       </Card>
+      <Card>
+        <h3 className="font-heading text-lg">Payout Requests</h3>
+        <div className="mt-3 space-y-3">
+          {payoutRequests.length ? (
+            payoutRequests.map((request) => (
+              <div key={request.id} className="rounded-control border border-slate-700 p-3 text-sm text-slate-300">
+                <div className="flex items-center justify-between gap-3">
+                  <span>{formatInrCurrency(request.amount)}</span>
+                  <StatusTag value={request.status} />
+                </div>
+                <p className="mt-1 text-xs text-slate-400">Requested on {new Date(request.requestedAt).toLocaleString('en-IN')}</p>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-slate-300">No payout requests submitted yet.</p>
+          )}
+        </div>
+      </Card>
+      </section>
     </PageShell>
   )
 }

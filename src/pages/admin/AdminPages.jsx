@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
+import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   Bar,
@@ -14,18 +16,25 @@ import {
 } from 'recharts'
 import { Button, Card, DataSkeleton, Input, PageShell, Select, StatusTag } from '../../components/common'
 import { useMockFetch } from '../../hooks/useMockFetch'
+import { useAppStore } from '../../store/useAppStore'
+import { formatInrCurrency } from '../../utils/formatters'
 
 export function AdminDashboardPage() {
   const { data: revenue, loading } = useMockFetch('/mock/revenue.json', [])
+  const users = useAppStore((state) => state.users)
+  const vendorProfiles = useAppStore((state) => state.vendorProfiles)
+  const vendorBookings = useAppStore((state) => state.vendorBookings)
+  const totalRevenue = revenue.reduce((sum, row) => sum + row.amount, 0)
+  const activeRentals = vendorBookings.filter((booking) => booking.status === 'Ongoing').length
   const bookingBars = revenue.map((r) => ({ month: r.month, bookings: r.bookings }))
 
   return (
     <PageShell title="Dashboard Overview" subtitle="Real-time platform KPIs, revenue trends, and booking activity.">
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card><p className="text-sm text-slate-300">Total Bookings</p><p className="font-heading text-2xl">12,482</p></Card>
-        <Card><p className="text-sm text-slate-300">Revenue</p><p className="font-heading text-2xl">$1.48M</p></Card>
-        <Card><p className="text-sm text-slate-300">Active Rentals</p><p className="font-heading text-2xl">328</p></Card>
-        <Card><p className="text-sm text-slate-300">Users / Vendors</p><p className="font-heading text-2xl">9,140 / 322</p></Card>
+        <Card><p className="text-sm text-slate-300">Total Bookings</p><p className="font-heading text-2xl">{vendorBookings.length}</p></Card>
+        <Card><p className="text-sm text-slate-300">Revenue</p><p className="font-heading text-2xl">{formatInrCurrency(totalRevenue)}</p></Card>
+        <Card><p className="text-sm text-slate-300">Active Rentals</p><p className="font-heading text-2xl">{activeRentals}</p></Card>
+        <Card><p className="text-sm text-slate-300">Users / Vendors</p><p className="font-heading text-2xl">{users.filter((user) => user.role === 'user').length} / {vendorProfiles.length}</p></Card>
       </section>
 
       {loading ? <DataSkeleton rows={5} /> : null}
@@ -66,8 +75,8 @@ export function AdminDashboardPage() {
       <Card>
         <h3 className="font-heading text-lg">Recent Activity</h3>
         <ul className="mt-3 space-y-2 text-sm text-slate-300">
-          <li>New vendor "MetroWheel" submitted verification documents.</li>
-          <li>Booking #DE-1192 was force-cancelled by support.</li>
+          <li>{vendorProfiles[0]?.name || 'A vendor'} submitted verification documents.</li>
+          <li>Booking #{vendorBookings[1]?.id || 'DE-1102'} was force-cancelled by support.</li>
           <li>Commission update scheduled for next billing cycle.</li>
         </ul>
       </Card>
@@ -76,7 +85,10 @@ export function AdminDashboardPage() {
 }
 
 export function AdminUsersPage() {
-  const { data: users, loading } = useMockFetch('/mock/users.json', [])
+  const allUsers = useAppStore((state) => state.users)
+  const users = allUsers.filter((user) => user.role !== 'admin')
+  const loading = false
+  const toggleUserStatus = useAppStore((state) => state.toggleUserStatus)
 
   return (
     <PageShell title="User Management" subtitle="Search users, inspect booking activity, and control access.">
@@ -84,20 +96,27 @@ export function AdminUsersPage() {
         <Input label="Search" placeholder="Name or email" />
         <Select label="Status"><option>All</option><option>Active</option><option>Suspended</option></Select>
         <Select label="Bookings"><option>Any</option><option>0-5</option><option>6+</option></Select>
-        <Button className="self-end" variant="amber">Apply Filters</Button>
+        <Button className="self-end" variant="amber" type="button">Apply Filters</Button>
       </Card>
       <Card>
         {loading ? <DataSkeleton rows={6} /> : null}
         {!loading ? (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="text-left text-slate-400"><tr><th className="py-2">User</th><th>Email</th><th>Bookings</th><th>Status</th><th>Action</th></tr></thead>
+              <thead className="text-left text-slate-400"><tr><th className="py-2">User</th><th>Email</th><th>Role</th><th>Bookings</th><th>Status</th><th>Action</th></tr></thead>
               <tbody>
                 {users.map((u) => (
                   <tr key={u.id} className="border-t border-slate-700">
-                    <td className="py-3">{u.name}</td><td>{u.email}</td><td>{u.bookingCount}</td><td>{u.status}</td>
+                    <td className="py-3">{u.name}</td><td>{u.email}</td><td>{u.role}</td><td>{u.bookingCount ?? 0}</td><td>{u.status}</td>
                     <td>
-                      <Button className="px-3 py-1 text-xs" variant="ghost" onClick={() => toast.success(`User ${u.status === 'Active' ? 'suspended' : 'activated'}`)}>
+                      <Button
+                        className="px-3 py-1 text-xs"
+                        variant="ghost"
+                        onClick={() => {
+                          toggleUserStatus(u.id)
+                          toast.success(`User ${u.status === 'Active' ? 'suspended' : 'activated'}`)
+                        }}
+                      >
                         {u.status === 'Active' ? 'Suspend' : 'Activate'}
                       </Button>
                     </td>
@@ -113,7 +132,9 @@ export function AdminUsersPage() {
 }
 
 export function AdminVendorsPage() {
-  const { data: vendors, loading } = useMockFetch('/mock/vendors.json', [])
+  const vendors = useAppStore((state) => state.vendorProfiles)
+  const loading = false
+  const updateVendorStatus = useAppStore((state) => state.updateVendorStatus)
 
   return (
     <PageShell title="Vendor Management" subtitle="Approve applications, audit listings, and enforce compliance.">
@@ -126,11 +147,11 @@ export function AdminVendorsPage() {
               <tbody>
                 {vendors.map((v) => (
                   <tr key={v.id} className="border-t border-slate-700">
-                    <td className="py-3">{v.name}</td><td>{v.listings}</td><td>{v.status}</td>
+                    <td className="py-3">{v.name}</td><td>{v.listings}</td><td><StatusTag value={v.status} /></td>
                     <td className="space-x-2">
-                      <Button className="px-3 py-1 text-xs" onClick={() => toast.success('Vendor approved')}>Approve</Button>
-                      <Button className="px-3 py-1 text-xs" variant="ghost" onClick={() => toast.error('Vendor rejected')}>Reject</Button>
-                      <Button className="px-3 py-1 text-xs" variant="ghost">Suspend</Button>
+                      <Button className="px-3 py-1 text-xs" onClick={() => { updateVendorStatus(v.id, 'Approved'); toast.success('Vendor approved') }}>Approve</Button>
+                      <Button className="px-3 py-1 text-xs" variant="ghost" onClick={() => { updateVendorStatus(v.id, 'Rejected'); toast.error('Vendor rejected') }}>Reject</Button>
+                      <Button className="px-3 py-1 text-xs" variant="ghost" onClick={() => { updateVendorStatus(v.id, 'Suspended'); toast('Vendor suspended') }}>Suspend</Button>
                     </td>
                   </tr>
                 ))}
@@ -144,7 +165,10 @@ export function AdminVendorsPage() {
 }
 
 export function AdminFleetPage() {
-  const { data: cars, loading } = useMockFetch('/mock/cars.json', [])
+  const cars = useAppStore((state) => state.vendorCars)
+  const loading = false
+  const deleteVendorCar = useAppStore((state) => state.deleteVendorCar)
+  const navigate = useNavigate()
 
   return (
     <PageShell title="Car Fleet Overview" subtitle="Manage all cars across vendors by availability state.">
@@ -163,10 +187,10 @@ export function AdminFleetPage() {
               <tbody>
                 {cars.map((car) => (
                   <tr key={car.id} className="border-t border-slate-700">
-                    <td className="py-3">{car.name}</td><td>{car.type}</td><td>${car.pricePerDay}</td><td><StatusTag value={car.status} /></td>
+                    <td className="py-3">{car.name}</td><td>{car.type}</td><td>{formatInrCurrency(car.pricePerDay)}</td><td><StatusTag value={car.status} /></td>
                     <td className="space-x-2">
-                      <Button className="px-3 py-1 text-xs" variant="ghost">Edit</Button>
-                      <Button className="px-3 py-1 text-xs" variant="ghost" onClick={() => toast.error('Car removed')}>Remove</Button>
+                      <Button className="px-3 py-1 text-xs" variant="ghost" onClick={() => navigate(`/admin/fleet/${car.id}/edit`)}>Edit</Button>
+                      <Button className="px-3 py-1 text-xs" variant="ghost" onClick={() => { deleteVendorCar(car.id); toast.error('Car removed') }}>Remove</Button>
                     </td>
                   </tr>
                 ))}
@@ -180,7 +204,9 @@ export function AdminFleetPage() {
 }
 
 export function AdminBookingsPage() {
-  const { data: bookings, loading } = useMockFetch('/mock/userBookings.json', [])
+  const bookings = useAppStore((state) => state.vendorBookings)
+  const loading = false
+  const updateVendorBookingStatus = useAppStore((state) => state.updateVendorBookingStatus)
 
   return (
     <PageShell title="Bookings Management" subtitle="Filter bookings by status, date, and vendor for rapid support actions.">
@@ -201,7 +227,7 @@ export function AdminBookingsPage() {
                 {bookings.map((b) => (
                   <tr key={b.id} className="border-t border-slate-700">
                     <td className="py-3">{b.id}</td><td>{b.car}</td><td>{b.dates}</td><td><StatusTag value={b.status} /></td>
-                    <td><Button className="px-3 py-1 text-xs" variant="ghost" onClick={() => toast.error('Booking force-cancelled')}>Force Cancel</Button></td>
+                    <td><Button className="px-3 py-1 text-xs" variant="ghost" onClick={() => { updateVendorBookingStatus(b.id, 'Cancelled'); toast.error('Booking force-cancelled') }}>Force Cancel</Button></td>
                   </tr>
                 ))}
               </tbody>
@@ -215,6 +241,18 @@ export function AdminBookingsPage() {
 
 export function AdminRevenuePage() {
   const { data: revenue, loading } = useMockFetch('/mock/revenue.json', [])
+  const exportRevenueCsv = () => {
+    const header = ['month,amount,bookings,vendorPayout']
+    const rows = revenue.map((row) => [row.month, row.amount, row.bookings, row.vendorPayout].join(','))
+    const csv = [header, rows].flat().join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = 'driveease-revenue.csv'
+    link.click()
+    URL.revokeObjectURL(link.href)
+    toast.success('CSV export downloaded')
+  }
 
   return (
     <PageShell title="Revenue & Analytics" subtitle="Breakdowns by vendor and category with export-ready reporting.">
@@ -222,7 +260,7 @@ export function AdminRevenuePage() {
         <Input label="Start Date" type="date" />
         <Input label="End Date" type="date" />
         <Select label="Category"><option>All Categories</option><option>Economy</option><option>Luxury</option></Select>
-        <Button className="self-end" variant="amber" onClick={() => toast.success('CSV export queued')}>
+        <Button className="self-end" variant="amber" onClick={exportRevenueCsv}>
           Export CSV
         </Button>
       </Card>
@@ -249,18 +287,23 @@ export function AdminRevenuePage() {
 }
 
 export function AdminSettingsPage() {
-  const { register, handleSubmit } = useForm({
-    defaultValues: {
-      commission: 12,
-      locations: 'New York, Chicago, Austin',
-      paymentGateway: 'Stripe',
-    },
+  const adminSettings = useAppStore((state) => state.adminSettings)
+  const saveAdminSettings = useAppStore((state) => state.saveAdminSettings)
+  const { register, handleSubmit, reset } = useForm({
+    defaultValues: adminSettings,
   })
+
+  useEffect(() => {
+    reset(adminSettings)
+  }, [adminSettings, reset])
 
   return (
     <PageShell title="Settings" subtitle="Platform commission, supported locations, and payment gateway configuration.">
       <Card>
-        <form className="grid gap-3 md:grid-cols-2" onSubmit={handleSubmit(() => toast.success('Settings saved'))}>
+        <form className="grid gap-3 md:grid-cols-2" onSubmit={handleSubmit((values) => {
+          saveAdminSettings(values)
+          toast.success('Settings saved')
+        })}>
           <Input label="Commission Rate (%)" type="number" {...register('commission')} />
           <Select label="Payment Gateway" {...register('paymentGateway')}>
             <option>Stripe</option>

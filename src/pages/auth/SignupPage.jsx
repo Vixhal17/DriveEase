@@ -60,7 +60,7 @@ export default function SignupPage() {
             </p>
             <h1 className="font-heading text-4xl font-bold">Create Your DriveEase Account</h1>
             <p className="mt-4 text-slate-300">
-              Register as a user, admin, or vendor to access your dedicated portal experience.
+              Register as a user or vendor to access your dedicated portal experience. New vendor registrations are reviewed in the admin portal.
             </p>
             <div className="mt-8 rounded-card border border-slate-700 bg-deepNavy p-4 text-sm text-slate-300">
               Signup is stored in local browser storage for this UI demo.
@@ -87,7 +87,6 @@ export default function SignupPage() {
 
             <Select label="Account Type" error={errors.role?.message} {...register('role', { required: 'Account type is required' })}>
               <option value="user">User</option>
-              <option value="admin">Admin</option>
               <option value="vendor">Vendor</option>
             </Select>
 

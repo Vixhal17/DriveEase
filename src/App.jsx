@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast'
 import PortalLayout from './components/PortalLayout'
 import ProtectedRoute from './components/ProtectedRoute'
 import { PageLoader } from './components/common'
+import AdminLoginPage from './pages/auth/AdminLoginPage'
 import LoginPage from './pages/auth/LoginPage'
 import SignupPage from './pages/auth/SignupPage'
 
@@ -49,6 +50,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/admin/login" element={<AdminLoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
 
           <Route
@@ -72,7 +74,7 @@ function App() {
           <Route
             path="/admin"
             element={
-              <ProtectedRoute allowedRoles={['admin']}>
+              <ProtectedRoute allowedRoles={['admin']} loginPath="/admin/login">
                 <PortalLayout role="admin" />
               </ProtectedRoute>
             }
@@ -81,6 +83,7 @@ function App() {
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="vendors" element={<AdminVendorsPage />} />
             <Route path="fleet" element={<AdminFleetPage />} />
+            <Route path="fleet/:id/edit" element={<VendorCarFormPage returnPath="/admin/fleet" />} />
             <Route path="bookings" element={<AdminBookingsPage />} />
             <Route path="revenue" element={<AdminRevenuePage />} />
             <Route path="settings" element={<AdminSettingsPage />} />

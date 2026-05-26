@@ -75,6 +75,9 @@ export function Select({ label, error, children, ...props }) {
 export function StatusTag({ value }) {
   const palette = {
     Pending: 'bg-amber-300/15 text-amber-300',
+    Approved: 'bg-emerald-300/15 text-emerald-300',
+    Rejected: 'bg-rose-300/15 text-rose-300',
+    Suspended: 'bg-rose-300/15 text-rose-300',
     Confirmed: 'bg-blue-300/15 text-blue-300',
     Ongoing: 'bg-cyan-300/15 text-cyan-300',
     Completed: 'bg-emerald-300/15 text-emerald-300',
@@ -109,6 +112,23 @@ export function DataSkeleton({ rows = 5 }) {
         <SkeletonBlock key={idx} className="h-12 w-full" />
       ))}
     </div>
+  )
+}
+
+export function CarImage({ src, alt, className = '' }) {
+  const fallback = 'https://placehold.co/960x640/0f172a/e2e8f0?text=DriveEase+Car'
+
+  return (
+    <img
+      src={src || fallback}
+      alt={alt}
+      loading="lazy"
+      className={clsx('w-full object-cover', className)}
+      onError={(event) => {
+        event.currentTarget.onerror = null
+        event.currentTarget.src = fallback
+      }}
+    />
   )
 }
 
